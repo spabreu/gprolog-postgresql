@@ -1,25 +1,25 @@
 % $Id$
 
 /* ----------------------------------------------------------------------------
- * GPROLOG-POSTGRESQL is Copyright (C) 1999-2002 Salvador Abreu
+ * GPROLOG-POSTGRESQL is Copyright (C) 1999-2004 Salvador Abreu
  * 
- *    This program is free software; you can redistribute it and/or
- *    modify it under the terms of the GNU General Public License as
- *    published by the Free Software Foundation; either version 2, or
- *    (at your option) any later version.
+ *    This program  is free software;  you can redistribute  it and/or
+ *    modify  it under  the terms  of  the GNU  Lesser General  Public
+ *    License  as published  by the  Free Software  Foundation; either
+ *    version 2.1, or (at your option) any later version.
  * 
- *    This program is distributed in the hope that it will be useful,
- *    but WITHOUT ANY WARRANTY; without even the implied warranty of
- *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- *    General Public License for more details.
+ *    This program is distributed in  the hope that it will be useful,
+ *    but WITHOUT  ANY WARRANTY; without even the  implied warranty of
+ *    MERCHANTABILITY or  FITNESS FOR  A PARTICULAR PURPOSE.   See the
+ *    GNU Lesser General Public License for more details.
  * 
- *    You should have received a copy of the GNU General Public License
- *    along with this program; if not, write to the Free Software
- *    Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA
- *    02111-1307, USA.
+ *    You should have received a copy of the GNU Lesser General Public
+ *    License  along with  this program;  if  not, write  to the  Free
+ *    Software Foundation, Inc., 59  Temple Place - Suite 330, Boston,
+ *    MA 02111-1307, USA.
  * 
- * On Debian GNU/Linux systems, the complete text of the GNU General
- * Public License can be found in `/usr/share/common-licenses/GPL'.
+ * On Debian  GNU/Linux systems, the  complete text of the  GNU Lesser
+ * General Public License is found in /usr/share/common-licenses/LGPL.
  * ----------------------------------------------------------------------------
  */
 
@@ -27,6 +27,12 @@
 
 :- foreign(pq_open(+codes, +integer, +codes, -integer)).
 :- foreign(pq_close(+integer)).
+
+:- foreign(pq_begin(+integer)).
+:- foreign(pq_end(+integer, +integer)).
+
+:- foreign(pq_get_binary(+integer, -integer)).
+:- foreign(pq_set_binary(+integer, +integer)).
 
 :- foreign(pq_exec(+integer, +codes, -integer), [choice_size(1)]).
 :- foreign(pq_fetch(+integer)).
@@ -89,6 +95,10 @@ pq_get_data_aux(timestamp,H,X,V) :- pq_get_data_date(H,X,V).
 	   [fct_name(pq_get_data_string)]).
 
 % $Log$
+% Revision 1.3  2004/04/27 09:22:40  spa
+% - Changed from GPL to LGPL.
+% - Added binary-format support predicates.
+%
 % Revision 1.2  2003/03/07 21:59:57  spa
 % *** empty log message ***
 %
