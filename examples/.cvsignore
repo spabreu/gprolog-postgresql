@@ -1,4 +1,6 @@
 bench
+bench2
 test
+test2
 *.o
 *~
