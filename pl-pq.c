@@ -271,9 +271,10 @@ Bool pq_exec(int connx, char *query, int *resx)
   }
   else {			// First time around: maybe create chp.
     *resx = -1;
-    res = PQexecParams (conn, query,
-			0, 0, 0, 0, 0,
-			connections[connx].binary);
+    if (connections[connx].binary)
+      res = PQexecParams (conn, query, 0, 0, 0, 0, 0, 1);
+    else
+      res = PQexec (conn, query);
 
     switch (PQresultStatus (res)) {
     case PGRES_EMPTY_QUERY:	// The string sent to the backend was empty.
@@ -526,6 +527,9 @@ Bool pq_clear (int resx)
 
 /*
  * $Log$
+ * Revision 1.5  2004/04/27 11:19:16  spa
+ * only call PQexecParams() when using binary connections.
+ *
  * Revision 1.4  2004/04/27 09:31:46  spa
  * - Auto-detect binary capability based on server protocol version.  Do
  * - timestamp conversion using timestamp2tm() copied from PostgreSQL
