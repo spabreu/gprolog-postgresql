@@ -7,7 +7,7 @@ Build-Depends: gprolog, postgresql-dev
 
 Package: gprolog-postgresql-cx
 Architecture: any
-Depends: gprolog, ${shlib:Depends}
+Depends: gprolog-cx (=1.2.13-3), ${shlib:Depends}, libpq3 (>=7.3.2)
 Conflicts: 
 Description: PostgreSQL interface for the Contextual GNU Prolog compiler.
  GProlog-PostgreSQL is a low-level GNU Prolog binding for accessing

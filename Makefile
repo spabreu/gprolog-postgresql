@@ -14,7 +14,7 @@ GPLC=gplc$(VARIANT)
 CFLAGS=-C "\
 	-fomit-frame-pointer\
 	-Wall\
-	-include /usr/include/gprolog${VARIANT}/gprolog.h"
+	-include /usr/lib/gprolog${VARIANT}/include/gprolog.h"
 LIBS=-lpq
 
 OBJECTS=pl-pq.o
