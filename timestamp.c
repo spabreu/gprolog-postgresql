@@ -93,9 +93,6 @@ do { \
 #endif
                                                                                 
 
-int PGTYPEStimestamp_defmt_scan(char **, char *, timestamp *, int *, int *, int *,
-							int *, int *, int *, int *);
-
 #ifdef HAVE_INT64_TIMESTAMP
 static int64
 time2t(const int hour, const int min, const int sec, const fsec_t fsec)
@@ -335,5 +332,5 @@ timestamp2tm(timestamp dt, int *tzp, struct tm * tm, fsec_t *fsec, char **tzn)
 
 
 // Local Variables:
-// compile-command: "gcc -c -I/usr/include/postgresql -I/usr/include/postgresql/internal timestamp.c"
+// compile-command: "gcc -c -I/usr/include/postgresql -I/usr/include/postgresql/internal -I/usr/include/postgresql/server timestamp.c"
 // End:
