@@ -53,7 +53,6 @@ install: build
 	install -c -m 444 pl-pq-prolog.pl ${ROOT}${INSTDIR}/interface.pl
 	install -c -m 444 pl-pq-full.o ${ROOT}${INSTDIR}/module.o
 	install -c -m 555 ${package} ${ROOT}/usr/bin
-	dh_undocumented ${package}.1
 # -----------------------------------------------------------------------------
 
 
@@ -62,6 +61,7 @@ install: build
 binary: build install
 	dh_testdir
 	dh_testroot
+	dh_installchangelogs
 	dh_installdocs
 	dh_installexamples examples/*.pl
 	dh_installmenu
