@@ -19,7 +19,7 @@ bench2: test2.pl bench.pl
 clean:
 	rm -f *~ \#*
 	rm -f *.o
-	rm -f bench test
+	rm -f bench bench2 test test2
 
 times-all.txt:: bench2
 	for X in date number int codes atom;		\

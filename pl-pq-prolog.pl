@@ -40,6 +40,9 @@
 :- foreign(pq_ntuples(+integer, -integer)).
 :- foreign(pq_last_oid(+integer, -integer)).
 
+:- foreign(pq_set_timing(+integer, +integer)).
+:- foreign(pq_stats(+integer, -integer, -integer, -term)).
+
 % -- Value retrieval predicates -----------------------------------------------
 
 pq_get_data(HANDLE, INDEX, TYPE, VALUE) :-
@@ -95,6 +98,9 @@ pq_get_data_aux(timestamp,H,X,V) :- pq_get_data_date(H,X,V).
 	   [fct_name(pq_get_data_string)]).
 
 % $Log$
+% Revision 1.4  2004/04/27 23:10:23  spa
+% *** empty log message ***
+%
 % Revision 1.3  2004/04/27 09:22:40  spa
 % - Changed from GPL to LGPL.
 % - Added binary-format support predicates.
