@@ -98,7 +98,7 @@ typedef struct {
 /* == Global variable declarations ========================================= */
 
 #define PQ_MAX_CONN 256
-#define PQ_MAX_RES  4096
+#define PQ_MAX_RES  16384
 
 static PQ_conn connections[PQ_MAX_CONN] = { { 0, 0 }, };
 static PQ_res  results[PQ_MAX_RES] = { { 0, 0, 0 }, };
@@ -668,6 +668,9 @@ Bool pq_clear (int resx)
 
 /*
  * $Log$
+ * Revision 1.9  2004/09/15 20:42:32  spa
+ * *** empty log message ***
+ *
  * Revision 1.8  2004/04/29 22:00:02  spa
  * Allow for null values everywhere.
  *
