@@ -1,0 +1,9 @@
+#! /bin/sh -x
+fakeroot debian/rules clean
+dpkg-buildpackage \
+  -rfakeroot \
+  -m"Salvador Abreu <spa@debian.org>" \
+  -e"Salvador Abreu <spa@debian.org>" \
+  -sgpg -k0x95A4F1D6 \
+  -i'.*/CVS/.*|.*/\.cvsignore|.*/\.ccmalloc.*|.*/debian/.*-packages$|.*/debian/src-orig-tar|.*/\.#.*' \
+  $@

@@ -1,0 +1,7 @@
+== GNU Prolog for Debian ======================================================
+-- PostgreSQL interface -------------------------------------------------------
+
+This package provides a basic PostgreSQL interface for GNU Prolog.  Sources
+available on http://host.di.uevora.pt/software/
+
+../salvador Abreu <spa@debian.org>

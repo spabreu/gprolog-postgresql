@@ -1,0 +1,5 @@
+gprolog-postgresql (1.0-1) unstable; urgency=low
+
+  * initial packaging.
+
+ -- Salvador Abreu <spa@debian.org>  Thu, 28 Feb 2002 15:17:11 +0000

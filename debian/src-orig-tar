@@ -1,0 +1,22 @@
+#! /bin/bash
+
+TMP_DIR=/var/tmp
+WORK_DIR=${PWD}
+VERSION=$(head -1 debian/changelog | cut -d' ' -f2 | tr -d '()' | sed -e 's/-[0-9.]*//')
+SRC_PKG=$(grep ^Source: debian/control | cut -d' ' -f2)
+TAR_DIR=${SRC_PKG}_${VERSION}.orig
+TAR_FILE=${WORK_DIR%/*}/${TAR_DIR}.tar.gz
+
+
+( cd ${TMP_DIR}
+    ln -sf ${WORK_DIR} ${TAR_DIR}
+    TAR_ENTRIES=$(LC_ALL=C ls -A1 ${TAR_DIR}/. | sed -e "s;^;${TAR_DIR}/;")
+    tar czvf $TAR_FILE \
+	--exclude "CVS" \
+	--exclude ".cvsignore" \
+	--exclude "debian" \
+	--exclude "#*" \
+	--exclude "*~" \
+	--no-anchored \
+		${TAR_ENTRIES}
+    rm -f ${TAR_DIR} )

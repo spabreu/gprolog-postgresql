@@ -1,0 +1,16 @@
+Source: gprolog-postgresql
+Section: devel
+Priority: optional
+Maintainer: Salvador Abreu <spa@debian.org>
+Standards-Version: 3.5.6
+Build-Depends: gprolog, postgresql-dev
+
+Package: gprolog-postgresql-cx
+Architecture: any
+Depends: gprolog, ${shlib:Depends}
+Conflicts: 
+Description: PostgreSQL interface for the Contextual GNU Prolog compiler.
+ GProlog-PostgreSQL is a low-level GNU Prolog binding for accessing
+ PostgreSQL.  This package is not really meant to be used directly but rather
+ as a building block for higher-level language processors such as ISCO
+ (package forthcoming).

@@ -1,0 +1,80 @@
+#! /usr/bin/make -f
+# =============================================================================
+# debian/rules for the GNU Prolog PostgreSQL interface package.
+#
+# Written by Salvador Abreu <spa@debian.org>
+
+# This is the debhelper compatibility version to use.
+export DH_COMPAT=3
+
+VARIANT=-cx
+package=gprolog-postgresql${VARIANT}
+GPLC=gplc${VARIANT}
+
+ROOT=${PWD}/debian/${package}
+INSTDIR=/usr/lib/gprolog${VARIANT}/ext/postgresql
+
+# == build binaries and documentation =========================================
+
+build: build-stamp
+build-stamp:
+	dh_testdir
+# -- commands to configure and build the package ------------------------------
+	make \
+		TARGET=${package} \
+		PREFIX=${ROOT}/usr LIBDIR=${ROOT}/usr/lib/gprolog${VARIANT}/
+# -----------------------------------------------------------------------------
+	touch build-stamp
+
+
+# == clean up everything ======================================================
+
+clean:
+	dh_testdir
+	dh_testroot
+	rm -f build-stamp
+# -- commands to clean up after the build process -----------------------------
+	make clean TARGET=${package}
+	rm -rf ${ROOT}
+# -----------------------------------------------------------------------------
+	dh_clean
+
+
+# == installation =============================================================
+
+install: build
+	dh_testdir
+	dh_testroot
+	dh_clean -k
+	dh_installdirs -A
+# -- commands to install the package into the staging area --------------------
+	mkdir -p ${ROOT}/usr/bin
+	mkdir -p ${ROOT}${INSTDIR}
+	install -c -m 444 pl-pq-prolog.pl ${ROOT}${INSTDIR}/interface.pl
+	install -c -m 444 pl-pq.o ${ROOT}${INSTDIR}/module.o
+	install -c -m 555 ${package} ${ROOT}/usr/bin
+	dh_undocumented ${package}.1
+# -----------------------------------------------------------------------------
+
+
+# == build package ============================================================
+
+binary: build install
+	dh_testdir
+	dh_testroot
+	dh_installdocs
+	dh_installexamples examples/*.pl
+	dh_installmenu
+	dh_installman
+	dh_installinfo
+	dh_link
+	dh_strip
+	dh_compress
+	dh_fixperms
+	dh_installdeb
+	dh_shlibdeps
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+.PHONY: build clean binary install
