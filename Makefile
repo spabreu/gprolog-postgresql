@@ -11,10 +11,12 @@ LIBDIR=$(PREFIX)/lib/isco
 VARIANT=-cx
 GPLC=gplc$(VARIANT)
 
-CFLAGS=-C "\
-	-fomit-frame-pointer\
-	-Wall\
-	-include /usr/lib/gprolog${VARIANT}/include/gprolog.h"
+OPT=				# try -Ox when it works :-(
+CFLAGS= $(OPT) \
+	-fomit-frame-pointer \
+	-Wall \
+	-include /usr/lib/gprolog${VARIANT}/include/gprolog.h
+
 LIBS=-lpq
 
 OBJECTS=pl-pq-full.o
@@ -24,7 +26,7 @@ all: $(TARGET)
 	touch .timestamp
 
 $(TARGET): $(PLFILES) $(OBJECTS)
-	$(GPLC) $(CFLAGS) -o $(TARGET) $^ -L $(LIBS)
+	$(GPLC) -C "$(CFLAGS)" -o $(TARGET) $^ -L $(LIBS)
 
 install: $(TARGET)
 	install -c -m 555 $(TARGET) $(BINDIR)
@@ -38,13 +40,13 @@ pl-pq-full.o: pl-pq.o timestamp.o
 
 timestamp.o: timestamp.c
 	gcc -c \
-	    -fomit-frame-pointer\
+	    $(CFLAGS) \
 	    -I/usr/include/postgresql \
 	    -I/usr/include/postgresql/internal \
 	    -I/usr/include/postgresql/server timestamp.c
 
-%.o:: %.pl
+u%.o:: %.pl
 	$(GPLC) -c $<
 
 %.o:: %.c
-	$(GPLC) $(CFLAGS) -c $<
+	$(GPLC) -C "$(CFLAGS)" -c $<
