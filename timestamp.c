@@ -209,7 +209,7 @@ SetEpochTimestamp(void)
   return dt;
 }	/* SetEpochTimestamp() */
 
-static void
+static inline void
 dt2time(timestamp jd, int *hour, int *min, int *sec, fsec_t *fsec)
 {
 #ifdef HAVE_INT64_TIMESTAMP
@@ -229,14 +229,22 @@ dt2time(timestamp jd, int *hour, int *min, int *sec, fsec_t *fsec)
   *sec = (time / INT64CONST(1000000));
   *fsec = (time - (*sec * INT64CONST(1000000)));
   *sec = (time / INT64CONST(1000000));
+#ifdef USE_FSEC
   *fsec = (time - (*sec * INT64CONST(1000000)));
+#else
+  *fsec = 0;
+#endif
 #else
   *hour = (time / 3600);
   time -= ((*hour) * 3600);
   *min = (time / 60);
   time -= ((*min) * 60);
   *sec = time;
+#ifdef USE_FSEC
   *fsec = JROUND(time - *sec);
+#else
+  *fsec = 0;
+#endif
 #endif
   return;
 }	/* dt2time() */
