@@ -421,14 +421,33 @@ Bool pq_get_data_int (int resx, int colno, int *value)
   char *value_tmp;
   int connx;
   int ts[3];
+  long long ltemp;
 
   CHECK_RES (resx, 0, pq_get_data_int);
   connx = results[resx].connx;
 
   INIT_TIMINGS ();
   value_tmp = PQgetvalue (results[resx].res, results[resx].row, colno-1);
-  if (connections[connx].binary)
-    ((uint32_t *) value)[0] = ntohl (((uint32_t *)value_tmp)[0]);
+  if (connections[connx].binary) {
+    int len = PQgetlength (results[resx].res, results[resx].row, colno-1);
+    switch (len) {
+    case 4:
+      ((uint32_t *) value)[0] = ntohl (((uint32_t *)value_tmp)[0]);
+      break;
+    case 8:
+      ((uint32_t *) &ltemp)[0] = ntohl (((uint32_t *)value_tmp)[1]);
+      ((uint32_t *) &ltemp)[1] = ntohl (((uint32_t *)value_tmp)[0]);
+      *value = ltemp;
+      break;
+    default: {
+      char msg[128];
+      sprintf (msg, "illegal int result length: %d", len);
+      Pl_Err_System (Create_Allocate_Atom (msg));
+      UPDATE_TIMINGS ();
+      return FALSE;
+    }
+    }
+  }
   else
     sscanf (value_tmp, "%d", value);
   UPDATE_TIMINGS ();
@@ -464,7 +483,7 @@ Bool pq_get_data_float (int resx, int colno, double *value)
       break;
     default: {
       char msg[128];
-      sprintf (msg, "illegal result length: %d", len);
+      sprintf (msg, "illegal float result length: %d", len);
       Pl_Err_System (Create_Allocate_Atom (msg));
       UPDATE_TIMINGS ();
       return FALSE;
@@ -634,6 +653,9 @@ Bool pq_clear (int resx)
 
 /*
  * $Log$
+ * Revision 1.7  2004/04/29 21:26:10  spa
+ * Handle bigints in integer results.  (mimmick float behaviour)
+ *
  * Revision 1.6  2004/04/27 23:09:34  spa
  * Allow for counting and timing of queries and results.
  *
