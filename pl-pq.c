@@ -45,6 +45,7 @@
 #include <alloca.h>
 #include <unistd.h>
 #include <netinet/in.h>
+#include <time.h>
 
 void swab(const void *from, void *to, ssize_t n);
 
@@ -160,6 +161,8 @@ Bool pq_open(char *host, int port, char *db, int *connx)
 	Pl_Err_System(Create_Allocate_Atom(msg));
 	return FALSE;
       }
+
+      connections[i].binary = PQprotocolVersion(connections[i].conn) >= 3;
 
       return TRUE;
     }
@@ -451,6 +454,10 @@ Bool pq_get_data_bool (int resx, int colno, int *value)
 
 Bool pq_get_data_date (int resx, int colno, PlTerm *value)
 {
+  int timestamp2tm(double dt, int *tzp, struct tm * tm,
+		   int *fsec, char **tzn);
+  int fsec;
+  struct tm tm;
   char *value_tmp;
   int   connx;
   int    dt_v[6] = { 1, 2, 3, 4, 5, 6 };
@@ -461,18 +468,21 @@ Bool pq_get_data_date (int resx, int colno, PlTerm *value)
 
   connx = results[resx].connx;
   if (connections[connx].binary) {
-    int len = PQgetlength (results[resx].res, results[resx].row, colno-1);
-    int i;
-    char *svalue_tmp = alloca (len);
+    // len must be 8:
+    // int len = PQgetlength (results[resx].res, results[resx].row, colno-1);
+    double svalue_tmp;
 
-    ((uint32_t *) svalue_tmp)[0] = ntohl (((uint32_t *)value_tmp)[1]);
-    ((uint32_t *) svalue_tmp)[1] = ntohl (((uint32_t *)value_tmp)[0]);
+    ((uint32_t *) &svalue_tmp)[0] = ntohl (((uint32_t *)value_tmp)[1]);
+    ((uint32_t *) &svalue_tmp)[1] = ntohl (((uint32_t *)value_tmp)[0]);
 
-    for (i=0; i<len/2; ++i) {
-      dt_v[i] = ((unsigned short *) svalue_tmp)[i];
-    }
-    for (i=len/2; i<6; ++i)
-      dt_v[i] = -1;
+    timestamp2tm (svalue_tmp, 0, &tm, &fsec, 0);
+
+    dt_v[0] = tm.tm_year;
+    dt_v[1] = tm.tm_mon;
+    dt_v[2] = tm.tm_mday;
+    dt_v[3] = tm.tm_hour;
+    dt_v[4] = tm.tm_min;
+    dt_v[5] = tm.tm_sec;
   }
   else {
     sscanf (value_tmp, "%4d-%2d-%2d %2d:%2d:%2d",
@@ -516,6 +526,11 @@ Bool pq_clear (int resx)
 
 /*
  * $Log$
+ * Revision 1.4  2004/04/27 09:31:46  spa
+ * - Auto-detect binary capability based on server protocol version.  Do
+ * - timestamp conversion using timestamp2tm() copied from PostgreSQL
+ *   distribution.
+ *
  * Revision 1.3  2004/04/26 13:40:40  spa
  * int4, float4, float8, bool, string: all working!
  * date: still needs attention.
