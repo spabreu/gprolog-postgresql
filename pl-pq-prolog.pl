@@ -54,6 +54,10 @@ pq_sql_type(double,	8).
 pq_sql_type(datetime,	9).
 pq_sql_type(timestamp,	11).
 pq_sql_type(varchar,	12).
+pq_sql_type(bit,        13).
+pq_sql_type(bitvar,     14).
+pq_sql_type(bool,       15).
+pq_sql_type(abstract,   16).
 
 pq_get_data_aux(integer,H,X,V) :- pq_get_data_int(H,X,V).
 pq_get_data_aux(smallint,H,X,V) :- pq_get_data_int(H,X,V).
@@ -62,7 +66,7 @@ pq_get_data_aux(float,H,X,V) :- pq_get_data_float(H,X,V).
 pq_get_data_aux(real,H,X,V) :- pq_get_data_float(H,X,V).
 pq_get_data_aux(double,H,X,V) :- pq_get_data_float(H,X,V).
 
-pq_get_data_aux(bool,H,X,V) :- pq_get_data_float(H,X,V).
+pq_get_data_aux(bool,H,X,V) :- pq_get_data_bool(H,X,V).
 
 pq_get_data_aux(text,H,X,V) :- pq_get_data_atom(H,X,V).
 pq_get_data_aux(varchar,H,X,V) :- pq_get_data_atom(H,X,V).
@@ -85,8 +89,11 @@ pq_get_data_aux(timestamp,H,X,V) :- pq_get_data_date(H,X,V).
 	   [fct_name(pq_get_data_string)]).
 
 % $Log$
-% Revision 1.1  2003/01/07 19:56:02  spa
-% Initial revision
+% Revision 1.2  2003/03/07 21:59:57  spa
+% *** empty log message ***
+%
+% Revision 1.1.1.1  2003/01/07 19:56:02  spa
+% Initial import
 %
 % Revision 1.4  2002/04/23 15:58:43  spa
 % *** empty log message ***
