@@ -37,7 +37,16 @@
  *   pq_ntuples(+RESINDEX, -COUNT)
  *   pq_last_oid(+RESINDEX, -OID)
  *
- *   pq_get_data(+RESINDEX, +COLNO, +TYPE, -RESTERM)
+ *   pq_get_data_*(+RESINDEX, +COLNO, -RESTERM)
+ *
+ *   pq_begin(+CONNINDEX)
+ *   pq_end(+CONNINDEX, +ABORT)
+ *
+ *   pq_get_binary(+CONNINDEX, -BINARY)
+ *   pq_set_binary(+CONNINDEX, +BINARY)
+ *
+ *   pq_set_timing(+CONNINDEX, +TIMING)
+ *   pq_stats(+CONNINDEX, -NQUERIES, -NRESULTS, -TIMES)
  */
 
 #include <string.h>
@@ -67,6 +76,13 @@ typedef struct {
   int     last_oid;		/* OID for last query (insert only) */
   int     binary;		/* is this a binary connection? */
   int     depth;		/* number of active transactions */
+  int     timing;		/* are we timing & counting? */
+  int     nqueries;		/* total # of queries */
+  int     nresults;		/* total # of results returned */
+  int     times[3];		/* USER, SYSTEM, ELAPSED */
+#define PQT_U 0
+#define PQT_S 1
+#define PQT_E 2
 } PQ_conn;
 
 typedef struct {
@@ -76,6 +92,8 @@ typedef struct {
   int       nrows;		/* number of rows */
   int      *chb;		/* related to corresponding choice-point */
 } PQ_res;
+
+
 
 /* == Global variable declarations ========================================= */
 
@@ -110,13 +128,23 @@ int PQ_max_res = 0;
   } while (0)
 
 
-#define RES_OK(rxi, index_only, fname)					\
-    if									\
-      break;								\
-    Pl_Err_System (Create_Atom (#fname ": illegal result index"));	\
-    return FALSE;							\
+#define INIT_TIMINGS()				\
+  do {						\
+    if (connections[connx].timing) {		\
+      ts[PQT_U] = M_User_Time ();		\
+      ts[PQT_S] = M_System_Time ();		\
+      ts[PQT_E] = M_Real_Time ();		\
+    }						\
   } while (0)
 
+#define UPDATE_TIMINGS()						\
+  do {									\
+    if (connections[connx].timing) {					\
+      connections[connx].times[PQT_U] += M_User_Time ()   - ts[PQT_U];	\
+      connections[connx].times[PQT_S] += M_System_Time () - ts[PQT_S];	\
+      connections[connx].times[PQT_E] += M_Real_Time ()   - ts[PQT_E];	\
+    }									\
+  } while (0)
 
 /* == Prototypes =========================================================== */
 
@@ -130,7 +158,7 @@ Bool pq_exec (int, char*, int*);
 Bool pq_fetch (int);
 Bool pq_ntuples (int, int*);
 Bool pq_last_oid(int, int*);
-Bool pq_get_data(int, int, int, PlTerm*);
+//Bool pq_get_data(int, int, int, PlTerm*);
 Bool pq_clear (int);
 
 
@@ -163,6 +191,12 @@ Bool pq_open(char *host, int port, char *db, int *connx)
       }
 
       connections[i].binary = PQprotocolVersion(connections[i].conn) >= 3;
+      connections[i].timing = 0;
+      connections[i].nqueries = 0;
+      connections[i].nresults = 0;
+      connections[i].times[PQT_U] = 0;
+      connections[i].times[PQT_S] = 0;
+      connections[i].times[PQT_E] = 0;
 
       return TRUE;
     }
@@ -252,11 +286,14 @@ Bool pq_exec(int connx, char *query, int *resx)
   int i;
   int nrows;
   int *chb = Get_Choice_Buffer (int *);
+  int ts[3];
 
   CHECK_CONN (connx, 0, pq_exec/3);
   conn = connections[connx].conn;
 
   if (Get_Choice_Counter() != 0) { // Been here already: advance to next tuple
+    if (connections[connx].timing) connections[connx].nresults++;
+
     i = *chb;
     *resx = i;
     if (++results[i].row < results[i].nrows)
@@ -270,22 +307,27 @@ Bool pq_exec(int connx, char *query, int *resx)
     return FALSE;
   }
   else {			// First time around: maybe create chp.
+    INIT_TIMINGS ();
     *resx = -1;
     if (connections[connx].binary)
       res = PQexecParams (conn, query, 0, 0, 0, 0, 0, 1);
     else
       res = PQexec (conn, query);
 
+    if (connections[connx].timing) connections[connx].nqueries++;
+
     switch (PQresultStatus (res)) {
     case PGRES_EMPTY_QUERY:	// The string sent to the backend was empty.
       No_More_Choice();
       PQclear (res);
+      UPDATE_TIMINGS ();
       return FALSE;
 
     case PGRES_COMMAND_OK:	// Succ. compl. of a command returning no data
       No_More_Choice();
       connections[connx].last_oid = (int) PQoidValue (res);
       PQclear (res);
+      UPDATE_TIMINGS ();
       return TRUE;
 
     case PGRES_TUPLES_OK:	// The query executed successfully
@@ -293,11 +335,14 @@ Bool pq_exec(int connx, char *query, int *resx)
       if (nrows == 0) {
 	PQclear (res);
 	No_More_Choice ();
+	UPDATE_TIMINGS ();
 	return FALSE;
       }
 
       for (i=0; i<PQ_MAX_RES; ++i) {
 	if (results[i].res == 0) {	   // Found an empty slot
+	  if (connections[connx].timing) connections[connx].nresults++;
+
 	  *chb = i;			   // save the index
 	  results[i].chb   = chb;	   // remember where
 	  results[i].res   = res;          // save the result,
@@ -309,12 +354,14 @@ Bool pq_exec(int connx, char *query, int *resx)
 
 	  Create_Water_Mark ((void (*) ()) pq_clear,
 			     (void *) i); // will undo this.
+	  UPDATE_TIMINGS ();
 	  return TRUE;
 	}
       }
       PQclear (res);
       No_More_Choice ();
       Pl_Err_System (Create_Atom ("pq_exec/3: too many open results"));
+      UPDATE_TIMINGS ();
       return FALSE;
 
     case PGRES_COPY_OUT:	// Copy Out (from server) data transfer started
@@ -323,6 +370,7 @@ Bool pq_exec(int connx, char *query, int *resx)
       PQclear (res);
       res = NULL;
       Pl_Err_System(Create_Atom("psql: back-end expecting copy in/out"));
+      UPDATE_TIMINGS ();
       return FALSE;
 
     case PGRES_BAD_RESPONSE:	// The server's response was not understood
@@ -333,6 +381,7 @@ Bool pq_exec(int connx, char *query, int *resx)
       sprintf(msg, "psql: %s", PQerrorMessage(conn));
       PQclear (res);
       Pl_Err_System(Create_Allocate_Atom(msg));
+      UPDATE_TIMINGS ();
       return FALSE;
     }
   }
@@ -371,14 +420,18 @@ Bool pq_get_data_int (int resx, int colno, int *value)
 {
   char *value_tmp;
   int connx;
+  int ts[3];
 
   CHECK_RES (resx, 0, pq_get_data_int);
-  value_tmp = PQgetvalue (results[resx].res, results[resx].row, colno-1);
   connx = results[resx].connx;
+
+  INIT_TIMINGS ();
+  value_tmp = PQgetvalue (results[resx].res, results[resx].row, colno-1);
   if (connections[connx].binary)
     ((uint32_t *) value)[0] = ntohl (((uint32_t *)value_tmp)[0]);
   else
     sscanf (value_tmp, "%d", value);
+  UPDATE_TIMINGS ();
   return TRUE;
 }
 
@@ -390,10 +443,13 @@ Bool pq_get_data_float (int resx, int colno, double *value)
   float ftemp;
   double dtemp;
   int connx;
+  int ts[3];
 
   CHECK_RES (resx, 0, pq_get_data_int);
-  value_tmp = PQgetvalue (results[resx].res, results[resx].row, colno-1);
   connx = results[resx].connx;
+
+  INIT_TIMINGS ();
+  value_tmp = PQgetvalue (results[resx].res, results[resx].row, colno-1);
   if (connections[connx].binary) {
     int len = PQgetlength (results[resx].res, results[resx].row, colno-1);
     switch (len) {
@@ -410,12 +466,14 @@ Bool pq_get_data_float (int resx, int colno, double *value)
       char msg[128];
       sprintf (msg, "illegal result length: %d", len);
       Pl_Err_System (Create_Allocate_Atom (msg));
+      UPDATE_TIMINGS ();
       return FALSE;
     }
     }
   }
   else
     sscanf (value_tmp, "%lg", value);
+  UPDATE_TIMINGS ();
   return TRUE;
 }
 
@@ -425,10 +483,13 @@ Bool pq_get_data_bool (int resx, int colno, int *value)
 {
   char *value_tmp;
   int connx;
+  int ts[3];
 
   CHECK_RES (resx, 0, pq_get_data_int);
-  value_tmp = PQgetvalue (results[resx].res, results[resx].row, colno-1);
   connx = results[resx].connx;
+  INIT_TIMINGS ();
+
+  value_tmp = PQgetvalue (results[resx].res, results[resx].row, colno-1);
   if (connections[connx].binary) {
     int len = PQgetlength (results[resx].res, results[resx].row, colno-1);
     switch (len) {
@@ -442,12 +503,14 @@ Bool pq_get_data_bool (int resx, int colno, int *value)
       char msg[128];
       sprintf (msg, "illegal result length: %d", len);
       Pl_Err_System (Create_Allocate_Atom (msg));
+      UPDATE_TIMINGS ();
       return FALSE;
     }
     }
   }
   else
     *value = value_tmp[0] == 't';
+  UPDATE_TIMINGS ();
   return TRUE;
 }
 
@@ -463,11 +526,14 @@ Bool pq_get_data_date (int resx, int colno, PlTerm *value)
   int   connx;
   int    dt_v[6] = { 1, 2, 3, 4, 5, 6 };
   PlTerm dt_a[6];
+  int ts[3];
 
   CHECK_RES (resx, 0, pq_get_data_date);
+  connx = results[resx].connx;
+  
+  INIT_TIMINGS ();
   value_tmp = PQgetvalue (results[resx].res, results[resx].row, colno-1);
 
-  connx = results[resx].connx;
   if (connections[connx].binary) {
     // len must be 8:
     // int len = PQgetlength (results[resx].res, results[resx].row, colno-1);
@@ -498,6 +564,7 @@ Bool pq_get_data_date (int resx, int colno, PlTerm *value)
   dt_a[4] = Mk_Integer (dt_v[4]); /* mm */
   dt_a[5] = Mk_Integer (dt_v[5]); /* ss */
   *value = Mk_Compound (Create_Atom ("dt"), 6, dt_a);
+  UPDATE_TIMINGS ();
   return TRUE;
 }
 
@@ -506,8 +573,47 @@ Bool pq_get_data_date (int resx, int colno, PlTerm *value)
 
 Bool pq_get_data_string (int resx, int colno, char **value)
 {
+  int connx;
+  int ts[3];
+
   CHECK_RES (resx, 0, pq_get_data_string);
+  connx = results[resx].connx;
+
+  INIT_TIMINGS ();
   *value = PQgetvalue (results[resx].res, results[resx].row, colno-1);
+  UPDATE_TIMINGS ();
+  return TRUE;
+}
+
+// :- foreign(pq_set_timing(+integer, +integer))
+
+Bool pq_set_timing (int connx, int timing)
+{
+  CHECK_CONN (connx, 0, pq_set_timing/2);
+  connections[connx].timing = timing;
+  if (timing) {
+    connections[connx].nqueries = 0;
+    connections[connx].nresults = 0;
+    connections[connx].times[PQT_U] = 0;
+    connections[connx].times[PQT_S] = 0;
+    connections[connx].times[PQT_E] = 0;
+  }
+  return TRUE;
+}
+
+// :- foreign(pq_stats(+integer, -integer, -integer, -list(integer))
+
+Bool pq_stats (int connx, int *nqueries, int *nresults, PlTerm *times)
+{
+  PlTerm ts[3];
+
+  CHECK_CONN (connx, 0, pq_set_timing/2);
+  *nqueries = connections[connx].nqueries;
+  *nresults = connections[connx].nresults;
+  ts[0] = Mk_Integer (connections[connx].times[PQT_U]);
+  ts[1] = Mk_Integer (connections[connx].times[PQT_S]);
+  ts[2] = Mk_Integer (connections[connx].times[PQT_E]);
+  *times = Mk_Proper_List (3, ts);
   return TRUE;
 }
 
@@ -525,8 +631,12 @@ Bool pq_clear (int resx)
   return TRUE;
 }
 
+
 /*
  * $Log$
+ * Revision 1.6  2004/04/27 23:09:34  spa
+ * Allow for counting and timing of queries and results.
+ *
  * Revision 1.5  2004/04/27 11:19:16  spa
  * only call PQexecParams() when using binary connections.
  *
