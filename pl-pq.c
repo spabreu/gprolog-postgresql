@@ -43,6 +43,10 @@
 #include <string.h>
 #include <stdlib.h>
 #include <alloca.h>
+#include <unistd.h>
+#include <netinet/in.h>
+
+void swab(const void *from, void *to, ssize_t n);
 
 #undef Min
 #undef Max
@@ -263,43 +267,27 @@ Bool pq_exec(int connx, char *query, int *resx)
     return FALSE;
   }
   else {			// First time around: maybe create chp.
-    char *q = query;
-    if (connections[connx].binary &&
-	!strncasecmp (query, "SELECT", 6)) {
-      int cnumber = connections[connx].depth;
-      char *tq = (char *) alloca (strlen (query) + 24);
-      sprintf (tq, "DECLARE K_%04d BINARY CURSOR FOR %s", cnumber, query);
-      q  = (char *) alloca (23);
-      sprintf (q,  "FETCH ALL FROM K_%04d", cnumber);
-      pq_begin (connx);
-      PQclear (PQexec (connections[connx].conn, tq));
-    }
-    
     *resx = -1;
-    res = PQexec (conn, q);
+    res = PQexecParams (conn, query,
+			0, 0, 0, 0, 0,
+			connections[connx].binary);
 
     switch (PQresultStatus (res)) {
     case PGRES_EMPTY_QUERY:	// The string sent to the backend was empty.
       No_More_Choice();
       PQclear (res);
-      if (connections[connx].binary)
-	pq_end (connx, 0);
       return FALSE;
 
     case PGRES_COMMAND_OK:	// Succ. compl. of a command returning no data
       No_More_Choice();
       connections[connx].last_oid = (int) PQoidValue (res);
       PQclear (res);
-      if (connections[connx].binary)
-	pq_end (connx, 0);
       return TRUE;
 
     case PGRES_TUPLES_OK:	// The query executed successfully
       nrows = PQntuples (res);
       if (nrows == 0) {
 	PQclear (res);
-	if (connections[connx].binary)
-	  pq_end (connx, 0);
 	No_More_Choice ();
 	return FALSE;
       }
@@ -321,8 +309,6 @@ Bool pq_exec(int connx, char *query, int *resx)
 	}
       }
       PQclear (res);
-      if (connections[connx].binary)
-	pq_end (connx, 0);
       No_More_Choice ();
       Pl_Err_System (Create_Atom ("pq_exec/3: too many open results"));
       return FALSE;
@@ -331,8 +317,6 @@ Bool pq_exec(int connx, char *query, int *resx)
     case PGRES_COPY_IN:		// copy In (to server) data transfer started
       No_More_Choice();
       PQclear (res);
-      if (connections[connx].binary)
-	pq_end (connx, 0);
       res = NULL;
       Pl_Err_System(Create_Atom("psql: back-end expecting copy in/out"));
       return FALSE;
@@ -344,8 +328,6 @@ Bool pq_exec(int connx, char *query, int *resx)
       No_More_Choice();
       sprintf(msg, "psql: %s", PQerrorMessage(conn));
       PQclear (res);
-      if (connections[connx].binary)
-	pq_end (connx, 0);
       Pl_Err_System(Create_Allocate_Atom(msg));
       return FALSE;
     }
@@ -390,7 +372,7 @@ Bool pq_get_data_int (int resx, int colno, int *value)
   value_tmp = PQgetvalue (results[resx].res, results[resx].row, colno-1);
   connx = results[resx].connx;
   if (connections[connx].binary)
-    *value = * (int *) value_tmp;
+    ((uint32_t *) value)[0] = ntohl (((uint32_t *)value_tmp)[0]);
   else
     sscanf (value_tmp, "%d", value);
   return TRUE;
@@ -401,6 +383,8 @@ Bool pq_get_data_int (int resx, int colno, int *value)
 Bool pq_get_data_float (int resx, int colno, double *value)
 {
   char *value_tmp;
+  float ftemp;
+  double dtemp;
   int connx;
 
   CHECK_RES (resx, 0, pq_get_data_int);
@@ -410,10 +394,13 @@ Bool pq_get_data_float (int resx, int colno, double *value)
     int len = PQgetlength (results[resx].res, results[resx].row, colno-1);
     switch (len) {
     case 4:
-      *value = * (float *) value_tmp;
+      *((uint32_t *) &ftemp) = ntohl (((uint32_t *)value_tmp)[0]);
+      *value = ftemp;
       break;
     case 8:
-      *value = * (double *) value_tmp;
+      ((uint32_t *) &dtemp)[0] = ntohl (((uint32_t *)value_tmp)[1]);
+      ((uint32_t *) &dtemp)[1] = ntohl (((uint32_t *)value_tmp)[0]);
+      *value = dtemp;
       break;
     default: {
       char msg[128];
@@ -442,7 +429,7 @@ Bool pq_get_data_bool (int resx, int colno, int *value)
     int len = PQgetlength (results[resx].res, results[resx].row, colno-1);
     switch (len) {
     case 4:
-      *value = * (int *) value_tmp;
+      ((uint32_t *) value)[0] = ntohl (((uint32_t *)value_tmp)[0]);
       break;
     case 1:
       *value = * (char *) value_tmp;
@@ -476,12 +463,15 @@ Bool pq_get_data_date (int resx, int colno, PlTerm *value)
   if (connections[connx].binary) {
     int len = PQgetlength (results[resx].res, results[resx].row, colno-1);
     int i;
-    
-    dt_v[0] = len;
+    char *svalue_tmp = alloca (len);
+
+    ((uint32_t *) svalue_tmp)[0] = ntohl (((uint32_t *)value_tmp)[1]);
+    ((uint32_t *) svalue_tmp)[1] = ntohl (((uint32_t *)value_tmp)[0]);
+
     for (i=0; i<len/2; ++i) {
-      dt_v[i+1] = ((unsigned short *) value_tmp)[i];
+      dt_v[i] = ((unsigned short *) svalue_tmp)[i];
     }
-    for (i=len/2+1; i<6; ++i)
+    for (i=len/2; i<6; ++i)
       dt_v[i] = -1;
   }
   else {
@@ -516,12 +506,7 @@ Bool pq_get_data_string (int resx, int colno, char **value)
 Bool pq_clear (int resx)
 {
   if (0 <= resx && resx < PQ_MAX_RES && results[resx].res) {
-    int connx;
     PQclear (results[resx].res);
-    connx = results[resx].connx;
-    if (connections[connx].binary) {
-      pq_end (resx, 0);
-    }
     results[resx].res = 0;
     connections[results[resx].connx].active -= 1;
   }
@@ -531,6 +516,10 @@ Bool pq_clear (int resx)
 
 /*
  * $Log$
+ * Revision 1.3  2004/04/26 13:40:40  spa
+ * int4, float4, float8, bool, string: all working!
+ * date: still needs attention.
+ *
  * Revision 1.2  2004/04/26 11:53:29  spa
  * Initial attempt to get binary result transfer, with cursors.  To be
  * abandoned shortly!
