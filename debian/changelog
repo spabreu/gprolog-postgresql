@@ -1,3 +1,40 @@
+gprolog-postgresql (1.1-2) unstable; urgency=low
+
+  * properly convert all datatypes.
+  * autodetect binary capability based on server protocol version.
+
+ -- Salvador Abreu <spa@debian.org>  Tue, 27 Apr 2004 14:35:56 +0530
+
+gprolog-postgresql (1.1-1) unstable; urgency=low
+
+  * allow for binary transfers, via binary cursors.
+
+ -- Salvador Abreu <spa@debian.org>  Sun, 25 Apr 2004 02:45:50 +0530
+
+gprolog-postgresql (1.0-7) unstable; urgency=low
+
+  * rebuild with gprolog-cx 1.2.18
+
+ -- Salvador Abreu <spa@di.uevora.pt>  Sat,  2 Aug 2003 16:53:03 +0100
+
+gprolog-postgresql (1.0-6) unstable; urgency=low
+
+  * rebuild with gprolog-cx 1.2.13-5
+
+ -- Salvador Abreu <spa@debian.org>  Thu, 10 Apr 2003 10:20:20 +0100
+
+gprolog-postgresql (1.0-5) unstable; urgency=low
+
+  * rebuild with new gprolog-cx
+
+ -- Salvador Abreu <spa@debian.org>  Mon,  7 Apr 2003 01:17:34 +0100
+
+gprolog-postgresql (1.0-4) unstable; urgency=low
+
+  * boolean datatype was wrong.
+
+ -- Salvador Abreu <spa@debian.org>  Fri,  7 Mar 2003 22:05:09 +0000
+
 gprolog-postgresql (1.0-3) unstable; urgency=low
 
   * rebuild with newer gprolog-cx and libpq3.
