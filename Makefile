@@ -17,7 +17,7 @@ CFLAGS=-C "\
 	-include /usr/lib/gprolog${VARIANT}/include/gprolog.h"
 LIBS=-lpq
 
-OBJECTS=pl-pq.o
+OBJECTS=pl-pq-full.o
 PLFILES=pl-pq-prolog.pl
 
 all: $(TARGET)
@@ -32,6 +32,16 @@ install: $(TARGET)
 
 clean::
 	rm -f $(TARGET) *.o *~ \#* .timestamp
+
+pl-pq-full.o: pl-pq.o timestamp.o
+	ld -r -o $@ pl-pq.o timestamp.o -lpq -lpgtypes
+
+timestamp.o: timestamp.c
+	gcc -c \
+	    -fomit-frame-pointer\
+	    -I/usr/include/postgresql \
+	    -I/usr/include/postgresql/internal \
+	    -I/usr/include/postgresql/server timestamp.c
 
 %.o:: %.pl
 	$(GPLC) -c $<
