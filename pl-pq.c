@@ -1,25 +1,25 @@
 /* $Id$ */
 
 /* ----------------------------------------------------------------------------
- * GPROLOG-POSTGRESQL is Copyright (C) 1999-2002 Salvador Abreu
+ * GPROLOG-POSTGRESQL is Copyright (C) 1999-2004 Salvador Abreu
  * 
- *    This program is free software; you can redistribute it and/or
- *    modify it under the terms of the GNU General Public License as
- *    published by the Free Software Foundation; either version 2, or
- *    (at your option) any later version.
+ *    This program  is free software;  you can redistribute  it and/or
+ *    modify  it under  the terms  of  the GNU  Lesser General  Public
+ *    License  as published  by the  Free Software  Foundation; either
+ *    version 2.1, or (at your option) any later version.
  * 
- *    This program is distributed in the hope that it will be useful,
- *    but WITHOUT ANY WARRANTY; without even the implied warranty of
- *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- *    General Public License for more details.
+ *    This program is distributed in  the hope that it will be useful,
+ *    but WITHOUT  ANY WARRANTY; without even the  implied warranty of
+ *    MERCHANTABILITY or  FITNESS FOR  A PARTICULAR PURPOSE.   See the
+ *    GNU Lesser General Public License for more details.
  * 
- *    You should have received a copy of the GNU General Public License
- *    along with this program; if not, write to the Free Software
- *    Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA
- *    02111-1307, USA.
+ *    You should have received a copy of the GNU Lesser General Public
+ *    License  along with  this program;  if  not, write  to the  Free
+ *    Software Foundation, Inc., 59  Temple Place - Suite 330, Boston,
+ *    MA 02111-1307, USA.
  * 
- * On Debian GNU/Linux systems, the complete text of the GNU General
- * Public License can be found in `/usr/share/common-licenses/GPL'.
+ * On Debian  GNU/Linux systems, the  complete text of the  GNU Lesser
+ * General Public License is found in /usr/share/common-licenses/LGPL.
  * ----------------------------------------------------------------------------
  */
 
@@ -42,6 +42,7 @@
 
 #include <string.h>
 #include <stdlib.h>
+#include <alloca.h>
 
 #undef Min
 #undef Max
@@ -50,12 +51,17 @@
 #include <postgresql/sql3types.h>
 
 
+#include <gprolog.h>
+
+
 /* == Type declarations ==================================================== */
 
 typedef struct {
   PGconn *conn;			/* connection */
   int     active;		/* number of active queries */
   int     last_oid;		/* OID for last query (insert only) */
+  int     binary;		/* is this a binary connection? */
+  int     depth;		/* number of active transactions */
 } PQ_conn;
 
 typedef struct {
@@ -111,6 +117,10 @@ int PQ_max_res = 0;
 
 Bool pq_open (char*, int, char*, int*);
 Bool pq_close (int);
+Bool pq_begin (int);		/* transaction group start */
+Bool pq_end (int, int);		/* transaction group end */
+Bool pq_get_binary (int, int*);
+Bool pq_set_binary (int, int);
 Bool pq_exec (int, char*, int*);
 Bool pq_fetch (int);
 Bool pq_ntuples (int, int*);
@@ -136,6 +146,7 @@ Bool pq_open(char *host, int port, char *db, int *connx)
       *connx = i;
       connections[i].conn = PQsetdb(host, port_str, NULL, NULL, db);
       connections[i].active = 0;
+
 
       if (PQstatus(connections[i].conn) == CONNECTION_BAD) {
 	static char msg[256];
@@ -168,6 +179,61 @@ Bool pq_close (int connx)
   return FALSE;
 }
 
+// :- foreign(pq_begin(+integer))
+
+Bool pq_begin (int connx)
+{
+  PGconn *conn = NULL;
+  PGresult *res;
+
+  CHECK_CONN (connx, 0, pq_begin/1);
+  conn = connections[connx].conn;
+  if (connections[connx].depth++ < 1) {	/* need to BEGIN */
+    res = PQexec (conn, "BEGIN");
+    PQclear (res);
+  }
+  return TRUE;
+}
+
+// :- foreign(pq_end(+integer, +integer)
+
+Bool pq_end (int connx, int abort)
+{
+  PGconn *conn = NULL;
+  PGresult *res;
+
+  CHECK_CONN (connx, 0, pq_end/2);
+  conn = connections[connx].conn;
+  if (connections[connx].depth > 0) {
+    if (--connections[connx].depth < 1) { /* need to END/ABORT */
+      res = PQexec (conn, abort? "ROLLBACK": "COMMIT");
+      PQclear (res);
+    }
+  }
+  return TRUE;
+}
+
+
+// :- foreign(pq_get_binary(+integer, -integer))
+
+Bool pq_get_binary (int connx, int *binary)
+{
+  CHECK_CONN (connx, 0, pq_get_binary/2);
+  *binary = connections[connx].binary;
+  return TRUE;
+}
+
+
+// :- foreign(pq_set_binary(+integer, +integer))
+
+Bool pq_set_binary (int connx, int binary)
+{
+  CHECK_CONN (connx, 0, pq_set_binary/2);
+  connections[connx].binary = binary;
+  return TRUE;
+}
+
+
 // :- foreign(pq_exec(+integer, +string, -integer), [choice_size(1)])
 // Returns the index of a PQ_res
 
@@ -197,25 +263,43 @@ Bool pq_exec(int connx, char *query, int *resx)
     return FALSE;
   }
   else {			// First time around: maybe create chp.
+    char *q = query;
+    if (connections[connx].binary &&
+	!strncasecmp (query, "SELECT", 6)) {
+      int cnumber = connections[connx].depth;
+      char *tq = (char *) alloca (strlen (query) + 24);
+      sprintf (tq, "DECLARE K_%04d BINARY CURSOR FOR %s", cnumber, query);
+      q  = (char *) alloca (23);
+      sprintf (q,  "FETCH ALL FROM K_%04d", cnumber);
+      pq_begin (connx);
+      PQclear (PQexec (connections[connx].conn, tq));
+    }
+    
     *resx = -1;
-    res = PQexec (conn, query);
+    res = PQexec (conn, q);
 
     switch (PQresultStatus (res)) {
     case PGRES_EMPTY_QUERY:	// The string sent to the backend was empty.
       No_More_Choice();
       PQclear (res);
+      if (connections[connx].binary)
+	pq_end (connx, 0);
       return FALSE;
 
     case PGRES_COMMAND_OK:	// Succ. compl. of a command returning no data
       No_More_Choice();
       connections[connx].last_oid = (int) PQoidValue (res);
       PQclear (res);
+      if (connections[connx].binary)
+	pq_end (connx, 0);
       return TRUE;
 
     case PGRES_TUPLES_OK:	// The query executed successfully
       nrows = PQntuples (res);
       if (nrows == 0) {
 	PQclear (res);
+	if (connections[connx].binary)
+	  pq_end (connx, 0);
 	No_More_Choice ();
 	return FALSE;
       }
@@ -231,11 +315,14 @@ Bool pq_exec(int connx, char *query, int *resx)
 	  connections[connx].active++;     // count them
 	  *resx = i;
 
-	  Create_Water_Mark (pq_clear, (void *) i); // will undo this.
+	  Create_Water_Mark ((void (*) ()) pq_clear,
+			     (void *) i); // will undo this.
 	  return TRUE;
 	}
       }
       PQclear (res);
+      if (connections[connx].binary)
+	pq_end (connx, 0);
       No_More_Choice ();
       Pl_Err_System (Create_Atom ("pq_exec/3: too many open results"));
       return FALSE;
@@ -244,6 +331,8 @@ Bool pq_exec(int connx, char *query, int *resx)
     case PGRES_COPY_IN:		// copy In (to server) data transfer started
       No_More_Choice();
       PQclear (res);
+      if (connections[connx].binary)
+	pq_end (connx, 0);
       res = NULL;
       Pl_Err_System(Create_Atom("psql: back-end expecting copy in/out"));
       return FALSE;
@@ -255,6 +344,8 @@ Bool pq_exec(int connx, char *query, int *resx)
       No_More_Choice();
       sprintf(msg, "psql: %s", PQerrorMessage(conn));
       PQclear (res);
+      if (connections[connx].binary)
+	pq_end (connx, 0);
       Pl_Err_System(Create_Allocate_Atom(msg));
       return FALSE;
     }
@@ -293,10 +384,15 @@ Bool pq_last_oid (int connx, int* oid)
 Bool pq_get_data_int (int resx, int colno, int *value)
 {
   char *value_tmp;
+  int connx;
 
   CHECK_RES (resx, 0, pq_get_data_int);
   value_tmp = PQgetvalue (results[resx].res, results[resx].row, colno-1);
-  sscanf (value_tmp, "%d", value);
+  connx = results[resx].connx;
+  if (connections[connx].binary)
+    *value = * (int *) value_tmp;
+  else
+    sscanf (value_tmp, "%d", value);
   return TRUE;
 }
 
@@ -305,10 +401,30 @@ Bool pq_get_data_int (int resx, int colno, int *value)
 Bool pq_get_data_float (int resx, int colno, double *value)
 {
   char *value_tmp;
+  int connx;
 
   CHECK_RES (resx, 0, pq_get_data_int);
   value_tmp = PQgetvalue (results[resx].res, results[resx].row, colno-1);
-  sscanf (value_tmp, "%lg", value);
+  connx = results[resx].connx;
+  if (connections[connx].binary) {
+    int len = PQgetlength (results[resx].res, results[resx].row, colno-1);
+    switch (len) {
+    case 4:
+      *value = * (float *) value_tmp;
+      break;
+    case 8:
+      *value = * (double *) value_tmp;
+      break;
+    default: {
+      char msg[128];
+      sprintf (msg, "illegal result length: %d", len);
+      Pl_Err_System (Create_Allocate_Atom (msg));
+      return FALSE;
+    }
+    }
+  }
+  else
+    sscanf (value_tmp, "%lg", value);
   return TRUE;
 }
 
@@ -317,10 +433,30 @@ Bool pq_get_data_float (int resx, int colno, double *value)
 Bool pq_get_data_bool (int resx, int colno, int *value)
 {
   char *value_tmp;
+  int connx;
 
   CHECK_RES (resx, 0, pq_get_data_int);
   value_tmp = PQgetvalue (results[resx].res, results[resx].row, colno-1);
-  *value = value_tmp[0] == 't';
+  connx = results[resx].connx;
+  if (connections[connx].binary) {
+    int len = PQgetlength (results[resx].res, results[resx].row, colno-1);
+    switch (len) {
+    case 4:
+      *value = * (int *) value_tmp;
+      break;
+    case 1:
+      *value = * (char *) value_tmp;
+      break;
+    default: {
+      char msg[128];
+      sprintf (msg, "illegal result length: %d", len);
+      Pl_Err_System (Create_Allocate_Atom (msg));
+      return FALSE;
+    }
+    }
+  }
+  else
+    *value = value_tmp[0] == 't';
   return TRUE;
 }
 
@@ -329,20 +465,37 @@ Bool pq_get_data_bool (int resx, int colno, int *value)
 Bool pq_get_data_date (int resx, int colno, PlTerm *value)
 {
   char *value_tmp;
+  int   connx;
   int    dt_v[6] = { 1, 2, 3, 4, 5, 6 };
   PlTerm dt_a[6];
 
   CHECK_RES (resx, 0, pq_get_data_date);
   value_tmp = PQgetvalue (results[resx].res, results[resx].row, colno-1);
-  sscanf (value_tmp, "%4d-%2d-%2d %2d:%2d:%2d",
-	  &dt_v[0], &dt_v[1], &dt_v[2],
-	  &dt_v[3], &dt_v[4], &dt_v[5]);
-  dt_a[0] = Mk_Integer (dt_v[0]);
-  dt_a[1] = Mk_Integer (dt_v[1]);
-  dt_a[2] = Mk_Integer (dt_v[2]);
-  dt_a[3] = Mk_Integer (dt_v[3]);
-  dt_a[4] = Mk_Integer (dt_v[4]);
-  dt_a[5] = Mk_Integer (dt_v[5]);
+
+  connx = results[resx].connx;
+  if (connections[connx].binary) {
+    int len = PQgetlength (results[resx].res, results[resx].row, colno-1);
+    int i;
+    
+    dt_v[0] = len;
+    for (i=0; i<len/2; ++i) {
+      dt_v[i+1] = ((unsigned short *) value_tmp)[i];
+    }
+    for (i=len/2+1; i<6; ++i)
+      dt_v[i] = -1;
+  }
+  else {
+    sscanf (value_tmp, "%4d-%2d-%2d %2d:%2d:%2d",
+	    &dt_v[0], &dt_v[1], &dt_v[2],
+	    &dt_v[3], &dt_v[4], &dt_v[5]);
+  }
+
+  dt_a[0] = Mk_Integer (dt_v[0]); /* YYYY */
+  dt_a[1] = Mk_Integer (dt_v[1]); /* MM */
+  dt_a[2] = Mk_Integer (dt_v[2]); /* DD */
+  dt_a[3] = Mk_Integer (dt_v[3]); /* hh */
+  dt_a[4] = Mk_Integer (dt_v[4]); /* mm */
+  dt_a[5] = Mk_Integer (dt_v[5]); /* ss */
   *value = Mk_Compound (Create_Atom ("dt"), 6, dt_a);
   return TRUE;
 }
@@ -363,7 +516,12 @@ Bool pq_get_data_string (int resx, int colno, char **value)
 Bool pq_clear (int resx)
 {
   if (0 <= resx && resx < PQ_MAX_RES && results[resx].res) {
+    int connx;
     PQclear (results[resx].res);
+    connx = results[resx].connx;
+    if (connections[connx].binary) {
+      pq_end (resx, 0);
+    }
     results[resx].res = 0;
     connections[results[resx].connx].active -= 1;
   }
@@ -373,8 +531,12 @@ Bool pq_clear (int resx)
 
 /*
  * $Log$
- * Revision 1.1  2003/01/07 19:56:02  spa
- * Initial revision
+ * Revision 1.2  2004/04/26 11:53:29  spa
+ * Initial attempt to get binary result transfer, with cursors.  To be
+ * abandoned shortly!
+ *
+ * Revision 1.1.1.1  2003/01/07 19:56:02  spa
+ * Initial import
  *
  * Revision 1.9  2002/05/05 07:33:54  spa
  * Backed off no-watermark changes.
