@@ -431,6 +431,9 @@ Bool pq_get_data_int (int resx, int colno, int *value)
   if (connections[connx].binary) {
     int len = PQgetlength (results[resx].res, results[resx].row, colno-1);
     switch (len) {
+    case 0:
+      *value = 0;
+      break;
     case 4:
       ((uint32_t *) value)[0] = ntohl (((uint32_t *)value_tmp)[0]);
       break;
@@ -441,7 +444,7 @@ Bool pq_get_data_int (int resx, int colno, int *value)
       break;
     default: {
       char msg[128];
-      sprintf (msg, "illegal int result length: %d", len);
+      sprintf (msg, "illegal int result length: %d (col %d)", len, colno);
       Pl_Err_System (Create_Allocate_Atom (msg));
       UPDATE_TIMINGS ();
       return FALSE;
@@ -472,6 +475,9 @@ Bool pq_get_data_float (int resx, int colno, double *value)
   if (connections[connx].binary) {
     int len = PQgetlength (results[resx].res, results[resx].row, colno-1);
     switch (len) {
+    case 0:
+      *value = 0.0;
+      break;
     case 4:
       *((uint32_t *) &ftemp) = ntohl (((uint32_t *)value_tmp)[0]);
       *value = ftemp;
@@ -483,7 +489,7 @@ Bool pq_get_data_float (int resx, int colno, double *value)
       break;
     default: {
       char msg[128];
-      sprintf (msg, "illegal float result length: %d", len);
+      sprintf (msg, "illegal float result length: %d (col %d)", len, colno);
       Pl_Err_System (Create_Allocate_Atom (msg));
       UPDATE_TIMINGS ();
       return FALSE;
@@ -512,6 +518,9 @@ Bool pq_get_data_bool (int resx, int colno, int *value)
   if (connections[connx].binary) {
     int len = PQgetlength (results[resx].res, results[resx].row, colno-1);
     switch (len) {
+    case 0:
+      *value = FALSE;
+      break;
     case 4:
       ((uint32_t *) value)[0] = ntohl (((uint32_t *)value_tmp)[0]);
       break;
@@ -520,7 +529,7 @@ Bool pq_get_data_bool (int resx, int colno, int *value)
       break;
     default: {
       char msg[128];
-      sprintf (msg, "illegal result length: %d", len);
+      sprintf (msg, "illegal bool result length: %d (col %d)", len, colno);
       Pl_Err_System (Create_Allocate_Atom (msg));
       UPDATE_TIMINGS ();
       return FALSE;
@@ -555,8 +564,14 @@ Bool pq_get_data_date (int resx, int colno, PlTerm *value)
 
   if (connections[connx].binary) {
     // len must be 8:
-    // int len = PQgetlength (results[resx].res, results[resx].row, colno-1);
+    int len = PQgetlength (results[resx].res, results[resx].row, colno-1);
     double svalue_tmp;
+
+    if (len != 8) {
+      *value = Mk_String ("null");
+      UPDATE_TIMINGS ();
+      return TRUE;
+    }
 
     ((uint32_t *) &svalue_tmp)[0] = ntohl (((uint32_t *)value_tmp)[1]);
     ((uint32_t *) &svalue_tmp)[1] = ntohl (((uint32_t *)value_tmp)[0]);
@@ -653,6 +668,9 @@ Bool pq_clear (int resx)
 
 /*
  * $Log$
+ * Revision 1.8  2004/04/29 22:00:02  spa
+ * Allow for null values everywhere.
+ *
  * Revision 1.7  2004/04/29 21:26:10  spa
  * Handle bigints in integer results.  (mimmick float behaviour)
  *
