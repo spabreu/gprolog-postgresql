@@ -1,3 +1,5 @@
+% sample code
+
 x_connect :- pq_open("", 0, "coolpix", CH), g_assign(ch, CH).
 
 x_get(R) :- x_get("select * from pix order by number", R).
