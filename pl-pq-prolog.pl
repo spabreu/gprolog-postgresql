@@ -38,7 +38,7 @@
 :- foreign(pq_fetch(+integer)).
 
 :- foreign(pq_ntuples(+integer, -integer)).
-:- foreign(pq_last_oid(+integer, -integer)).
+:- foreign(pq_last_oid(+integer, -string)).
 
 :- foreign(pq_set_timing(+integer, +integer)).
 :- foreign(pq_stats(+integer, -integer, -integer, -term)).
@@ -98,6 +98,9 @@ pq_get_data_aux(timestamp,H,X,V) :- pq_get_data_date(H,X,V).
 	   [fct_name(pq_get_data_string)]).
 
 % $Log$
+% Revision 1.5  2005/04/28 15:50:47  gjm
+% OID as strings.
+%
 % Revision 1.4  2004/04/27 23:10:23  spa
 % *** empty log message ***
 %
