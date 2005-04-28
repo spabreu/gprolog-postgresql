@@ -157,7 +157,7 @@ Bool pq_set_binary (int, int);
 Bool pq_exec (int, char*, int*);
 Bool pq_fetch (int);
 Bool pq_ntuples (int, int*);
-Bool pq_last_oid(int, int*);
+Bool pq_last_oid(int, char**);
 //Bool pq_get_data(int, int, int, PlTerm*);
 Bool pq_clear (int);
 
@@ -404,12 +404,15 @@ Bool pq_ntuples (int resx, int* ntuples)
   return TRUE;
 }
 
-// :- foreign(pq_last_oid(+integer, -integer))
+// :- foreign(pq_last_oid(+integer, -string))
 
-Bool pq_last_oid (int connx, int* oid)
+Bool pq_last_oid (int connx, char **oid)
 {
+    static char soid[32];
+    
   CHECK_CONN (connx, 0, pq_ntuples);
-  *oid = connections[connx].last_oid;
+  sprintf(soid, "%d", connections[connx].last_oid);
+  *oid = soid;
   return TRUE;
 }
 
@@ -668,6 +671,9 @@ Bool pq_clear (int resx)
 
 /*
  * $Log$
+ * Revision 1.10  2005/04/28 15:51:24  gjm
+ * OID as string.
+ *
  * Revision 1.9  2004/09/15 20:42:32  spa
  * *** empty log message ***
  *
