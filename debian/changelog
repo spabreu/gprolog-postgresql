@@ -1,3 +1,9 @@
+gprolog-postgresql (1.1-8) unstable; urgency=low
+
+  * OID as string
+
+ -- Gonçalo Marrafa <gjm@uevora.pt>  Wed, 27 Apr 2005 15:31:51 +0100
+
 gprolog-postgresql (1.1-7) unstable; urgency=low
 
   * bump PQ_MAX_RES
