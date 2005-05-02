@@ -1,8 +1,9 @@
 // ----------------------------------------------------------------------------
 // Part of gprolog-postgresql
 //
-// This file is modified from the PostgreSQL 7.4.2 distribution, which has
-// the following copyright notice:
+// This file is modified from the PostgreSQL 7.4.7 distribution, taken from
+// file: ./src/interfaces/ecpg/pgtypeslib/timestamp.c to which the following
+// copyright notice applies:
 //
 //   PostgreSQL Data Base Management System
 //   (formerly known as Postgres, then as Postgres95).
@@ -34,6 +35,12 @@
 // 
 // ----------------------------------------------------------------------------
 
+#undef Min			/* gprolog-awareness */
+#undef Max			/* idem */
+
+//#define HAVE_INT64_TIMESTAMP 1
+//#define INT64_IS_BUSTED 1
+
 #include "postgres_fe.h"
 #include <time.h>
 #include <float.h>
@@ -43,104 +50,31 @@
 #error -ffast-math is known to break this code
 #endif
 
-//#include "extern.h"
-//#include "dt.h"
+#include <server/postgres.h>
+#include <server/utils/timestamp.h>
 
-#include <postgres.h>
-#include <pgtypes_timestamp.h>
-#include <pgtypes_date.h>
+#define TimestampTz ZORG1	/* Crock. */
+#define fsec_t ZORG2		/* here also. */
+#include "dt.h"
+#include "pgtypes_date.h"
+#undef TimestampTz
+#undef fsec_t
 
-
-//#include <utils/datetime.h>
-
-#ifdef HAVE_INT64_TIMESTAM
-
-typedef int32 fsec_t;
- 
-#else
- 
-typedef double fsec_t;
- 
-#define TIME_PREC_INV 1000000.0
-#define JROUND(j) (rint(((double) (j))*TIME_PREC_INV)/TIME_PREC_INV)
-#endif
-
-
-/* Julian date support for date2j() and j2date()
- *
- * IS_VALID_JULIAN checks the minimum date exactly, but is a bit sloppy
- * about the maximum, since it's far enough out to not be especially
- * interesting.
- */
- 
-#define JULIAN_MINYEAR (-4713)
-#define JULIAN_MINMONTH (11)
-#define JULIAN_MINDAY (24)
-#define JULIAN_MAXYEAR (5874898)
- 
-#define IS_VALID_JULIAN(y,m,d) ((((y) > JULIAN_MINYEAR) \
-  || (((y) == JULIAN_MINYEAR) && (((m) > JULIAN_MINMONTH) \
-  || (((m) == JULIAN_MINMONTH) && ((d) >= JULIAN_MINDAY))))) \
- && ((y) < JULIAN_MAXYEAR))
- 
-/* Julian-date equivalents of Day 0 in Unix and Postgres reckoning */
-#define UNIX_EPOCH_JDATE                2440588 /* == date2j(1970, 1, 1) */
-#define POSTGRES_EPOCH_JDATE    2451545 /* == date2j(2000, 1, 1) */
-
-
-
-/*
- * Info about limits of the Unix time_t data type.  We assume that time_t
- * is a signed int32 with origin 1970-01-01.  Note this is only relevant
- * when we use the C library's time routines for timezone processing.
- */
-#define UTIME_MINYEAR (1901)
-#define UTIME_MINMONTH (12)
-#define UTIME_MINDAY (14)
-#define UTIME_MAXYEAR (2038)
-#define UTIME_MAXMONTH (01)
-#define UTIME_MAXDAY (18)
-                                                                                
-#define IS_VALID_UTIME(y,m,d) ((((y) > UTIME_MINYEAR) \
- || (((y) == UTIME_MINYEAR) && (((m) > UTIME_MINMONTH) \
-  || (((m) == UTIME_MINMONTH) && ((d) >= UTIME_MINDAY))))) \
- && (((y) < UTIME_MAXYEAR) \
- || (((y) == UTIME_MAXYEAR) && (((m) < UTIME_MAXMONTH) \
-  || (((m) == UTIME_MAXMONTH) && ((d) <= UTIME_MAXDAY))))))
-                                                                                
-
-/* TMODULO()
- * Like FMODULO(), but work on the timestamp datatype (either int64 or float8).
- * We assume that int64 follows the C99 semantics for division (negative
- * quotients truncate towards zero).
- */
-#ifdef HAVE_INT64_TIMESTAMP
-#define TMODULO(t,q,u) \
-do { \
-        q = (t / u); \
-        if (q != 0) t -= (q * u); \
-} while(0)
-#else
-#define TMODULO(t,q,u) \
-do { \
-        q = ((t < 0) ? ceil(t / u) : floor(t / u)); \
-        if (q != 0) t -= rint(q * u); \
-} while(0)
-#endif
-                                                                                
+int PGTYPEStimestamp_defmt_scan(char **, char *, timestamp *, int *, int *, int *,
+							int *, int *, int *, int *);
 
 #ifdef HAVE_INT64_TIMESTAMP
 static int64
 time2t(const int hour, const int min, const int sec, const fsec_t fsec)
 {
-	return ((((((hour * 60) + min) * 60) + sec) * INT64CONST(1000000)) + fsec);
+  return ((((((hour * 60) + min) * 60) + sec) * INT64CONST(1000000)) + fsec);
 }	/* time2t() */
 
 #else
 static double
 time2t(const int hour, const int min, const int sec, const fsec_t fsec)
 {
-	return ((((hour * 60) + min) * 60) + sec + fsec);
+  return ((((hour * 60) + min) * 60) + sec + fsec);
 }	/* time2t() */
 #endif
 
@@ -197,7 +131,7 @@ tm2timestamp(struct tm * tm, fsec_t fsec, int *tzp, timestamp *result)
   return 0;
 }	/* tm2timestamp() */
 
-static timestamp
+timestamp
 SetEpochTimestamp(void)
 {
   timestamp	dt;
@@ -209,7 +143,7 @@ SetEpochTimestamp(void)
   return dt;
 }	/* SetEpochTimestamp() */
 
-static inline void
+void
 dt2time(timestamp jd, int *hour, int *min, int *sec, fsec_t *fsec)
 {
 #ifdef HAVE_INT64_TIMESTAMP
@@ -229,22 +163,14 @@ dt2time(timestamp jd, int *hour, int *min, int *sec, fsec_t *fsec)
   *sec = (time / INT64CONST(1000000));
   *fsec = (time - (*sec * INT64CONST(1000000)));
   *sec = (time / INT64CONST(1000000));
-#ifdef USE_FSEC
   *fsec = (time - (*sec * INT64CONST(1000000)));
-#else
-  *fsec = 0;
-#endif
 #else
   *hour = (time / 3600);
   time -= ((*hour) * 3600);
   *min = (time / 60);
   time -= ((*min) * 60);
   *sec = time;
-#ifdef USE_FSEC
   *fsec = JROUND(time - *sec);
-#else
-  *fsec = 0;
-#endif
 #endif
   return;
 }	/* dt2time() */
@@ -266,7 +192,6 @@ timestamp2tm(timestamp dt, int *tzp, struct tm * tm, fsec_t *fsec, char **tzn)
 #ifdef HAVE_INT64_TIMESTAMP
   int		dDate, date0;
   int64		time;
-
 #else
   double		dDate, date0;
   double		time;
