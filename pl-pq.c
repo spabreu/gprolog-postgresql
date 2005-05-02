@@ -64,6 +64,10 @@ void swab(const void *from, void *to, ssize_t n);
 #include <postgresql/libpq-fe.h>
 #include <postgresql/sql3types.h>
 
+#include <postgresql/server/postgres.h>
+#include <postgresql/server/utils/timestamp.h>
+
+
 
 #include <gprolog.h>
 
@@ -549,9 +553,7 @@ Bool pq_get_data_bool (int resx, int colno, int *value)
 
 Bool pq_get_data_date (int resx, int colno, PlTerm *value)
 {
-  int timestamp2tm(double dt, int *tzp, struct tm * tm,
-		   int *fsec, char **tzn);
-  int fsec;
+  fsec_t fsec;
   struct tm tm;
   char *value_tmp;
   int   connx;
@@ -568,7 +570,7 @@ Bool pq_get_data_date (int resx, int colno, PlTerm *value)
   if (connections[connx].binary) {
     // len must be 8:
     int len = PQgetlength (results[resx].res, results[resx].row, colno-1);
-    double svalue_tmp;
+    Timestamp svalue_tmp;
 
     if (len != 8) {
       *value = Mk_String ("null");
@@ -671,6 +673,9 @@ Bool pq_clear (int resx)
 
 /*
  * $Log$
+ * Revision 1.11  2005/05/02 13:58:10  spa
+ * Fix calls to timestamp2tm().
+ *
  * Revision 1.10  2005/04/28 15:51:24  gjm
  * OID as string.
  *
