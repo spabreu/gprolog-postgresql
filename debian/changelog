@@ -1,3 +1,11 @@
+gprolog-postgresql (1.1-9) unstable; urgency=low
+
+  * timestamp.c: new timestamp2tm code, fixes early date decoding errors.
+  * pl-pq.c: correct call to timestamp2tm().
+  * Makefile: compile everything with PostgreSQL's stuff for timestamps.
+
+ -- Salvador Abreu <spa@debian.org>  Mon,  2 May 2005 14:56:25 +0100
+
 gprolog-postgresql (1.1-8) unstable; urgency=low
 
   * OID as string
