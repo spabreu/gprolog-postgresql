@@ -49,4 +49,4 @@ u%.o:: %.pl
 	$(GPLC) -c $<
 
 %.o:: %.c
-	$(GPLC) -C "$(CFLAGS)" -c $<
+	$(GPLC) -C "-I/usr/include/postgresql -I/usr/include/postgresql/server $(CFLAGS)" -c $<
