@@ -76,7 +76,7 @@ void swab(const void *from, void *to, ssize_t n);
 
 #define XWD_BITS	27	/* 18 would be DEC-10 nostalgia ;-) */
 #define XWD_MASK        ((1<<XWD_BITS)-1)
-#define XWD_needed(x)   (((x) & XWD_MASK) != 0)
+#define XWD_needed(x)   (((x) & ~XWD_MASK) != 0)
 #define XWD_UH(x)       (((unsigned) x) >> XWD_BITS)
 #define XWD_LH(x)       (x & XWD_MASK)
 #define XWD(uh, lh)     ((uh) << XWD_BITS) | (lh)
@@ -699,6 +699,9 @@ Bool pq_clear (int resx)
 
 /*
  * $Log$
+ * Revision 1.13  2005/05/07 15:38:30  spa
+ * urk. fixed XWD_needed.
+ *
  * Revision 1.12  2005/05/07 15:29:55  spa
  * Handle ints that can't fit in a tagged Prolog cell: use the DEC-10
  * approach "xwd(UPPER, LOWER)"; allow for 27 bits in LOWER to avoid going
