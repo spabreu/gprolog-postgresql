@@ -1,3 +1,18 @@
+gprolog-postgresql (1.2-1) unstable; urgency=low
+
+  * pl-pq.c, pl-pq-prolog.pl: redid the "overflowing OID" act; this time a
+    dynamic representation is used: it's a regular integer when applicable
+    and a term of the "classic DEC-10" form xwd(UPPER, LOWER) when not.
+    Note that this requires that when passing xwd values to PostgreSQL,
+    these be properly interpreted.  This can easily be done by defining a
+    function such as:
+    
+      CREATE OR REPLACE FUNCTION xwd (int4, int4)
+        RETURNS int4
+        LANGUAGE 'SQL' AS 'SELECT $1 << 27 | $2';
+
+ -- Salvador Abreu <spa@debian.org>  Sat,  7 May 2005 16:04:21 +0100
+
 gprolog-postgresql (1.1-9) unstable; urgency=low
 
   * timestamp.c: new timestamp2tm code, fixes early date decoding errors.

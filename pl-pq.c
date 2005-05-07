@@ -72,6 +72,29 @@ void swab(const void *from, void *to, ssize_t n);
 #include <gprolog.h>
 
 
+/* -- Handle xwd(UPPER, LOWER) for longer-than-tagged ints ----------------- */
+
+#define XWD_BITS	27	/* 18 would be DEC-10 nostalgia ;-) */
+#define XWD_MASK        ((1<<XWD_BITS)-1)
+#define XWD_needed(x)   (((x) & XWD_MASK) != 0)
+#define XWD_UH(x)       (((unsigned) x) >> XWD_BITS)
+#define XWD_LH(x)       (x & XWD_MASK)
+#define XWD(uh, lh)     ((uh) << XWD_BITS) | (lh)
+
+static int xwd_functor = 0;
+static PlTerm xwd_args[2];
+
+static inline PlTerm xwd_int32 (unsigned long v) {
+  if (XWD_needed (v)) {
+    if (!xwd_functor) xwd_functor = Create_Atom ("xwd");
+    xwd_args[0] = Mk_Integer (XWD_UH(v));
+    xwd_args[1] = Mk_Integer (XWD_LH(v));
+    return Mk_Compound (xwd_functor, 2, xwd_args);
+  }
+  else
+    return Mk_Integer (v);
+}
+
 /* == Type declarations ==================================================== */
 
 typedef struct {
@@ -161,7 +184,7 @@ Bool pq_set_binary (int, int);
 Bool pq_exec (int, char*, int*);
 Bool pq_fetch (int);
 Bool pq_ntuples (int, int*);
-Bool pq_last_oid(int, char**);
+Bool pq_last_oid(int, PlTerm*);
 //Bool pq_get_data(int, int, int, PlTerm*);
 Bool pq_clear (int);
 
@@ -408,30 +431,32 @@ Bool pq_ntuples (int resx, int* ntuples)
   return TRUE;
 }
 
-// :- foreign(pq_last_oid(+integer, -string))
+// :- foreign(pq_last_oid(+integer, -term))
 
-Bool pq_last_oid (int connx, char **oid)
+Bool pq_last_oid (int connx, PlTerm *oidT)
 {
-    static char soid[32];
-    
+  unsigned int oid;
   CHECK_CONN (connx, 0, pq_ntuples);
-  sprintf(soid, "%d", connections[connx].last_oid);
-  *oid = soid;
+  oid = connections[connx].last_oid;
+  *oidT = xwd_int32 (oid);
   return TRUE;
 }
 
 
 // :- foreign(pq_get_data_int(+integer, +integer, -integer))
 
-Bool pq_get_data_int (int resx, int colno, int *value)
+Bool pq_get_data_int (int resx, int colno, PlTerm *value)
 {
   char *value_tmp;
   int connx;
   int ts[3];
-  long long ltemp;
+  long ltemp;
+  long long lltemp;
 
   CHECK_RES (resx, 0, pq_get_data_int);
   connx = results[resx].connx;
+
+  if (!xwd_functor) xwd_functor = Create_Atom ("xwd");
 
   INIT_TIMINGS ();
   value_tmp = PQgetvalue (results[resx].res, results[resx].row, colno-1);
@@ -442,12 +467,13 @@ Bool pq_get_data_int (int resx, int colno, int *value)
       *value = 0;
       break;
     case 4:
-      ((uint32_t *) value)[0] = ntohl (((uint32_t *)value_tmp)[0]);
+      ((uint32_t *) &ltemp)[0] = ntohl (((uint32_t *)value_tmp)[0]);
+      *value = xwd_int32 (ltemp);
       break;
     case 8:
-      ((uint32_t *) &ltemp)[0] = ntohl (((uint32_t *)value_tmp)[1]);
-      ((uint32_t *) &ltemp)[1] = ntohl (((uint32_t *)value_tmp)[0]);
-      *value = ltemp;
+      ((uint32_t *) &lltemp)[0] = ntohl (((uint32_t *)value_tmp)[1]);
+      ((uint32_t *) &lltemp)[1] = ntohl (((uint32_t *)value_tmp)[0]);
+      *value = xwd_int32 (lltemp); /* FIXME: overflows 64 -> 32 */
       break;
     default: {
       char msg[128];
@@ -673,6 +699,11 @@ Bool pq_clear (int resx)
 
 /*
  * $Log$
+ * Revision 1.12  2005/05/07 15:29:55  spa
+ * Handle ints that can't fit in a tagged Prolog cell: use the DEC-10
+ * approach "xwd(UPPER, LOWER)"; allow for 27 bits in LOWER to avoid going
+ * into this scheme too often.
+ *
  * Revision 1.11  2005/05/02 13:58:10  spa
  * Fix calls to timestamp2tm().
  *

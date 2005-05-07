@@ -38,7 +38,7 @@
 :- foreign(pq_fetch(+integer)).
 
 :- foreign(pq_ntuples(+integer, -integer)).
-:- foreign(pq_last_oid(+integer, -string)).
+:- foreign(pq_last_oid(+integer, -term)).
 
 :- foreign(pq_set_timing(+integer, +integer)).
 :- foreign(pq_stats(+integer, -integer, -integer, -term)).
@@ -84,7 +84,7 @@ pq_get_data_aux(datetime,H,X,V) :- pq_get_data_date(H,X,V).
 pq_get_data_aux(timestamp,H,X,V) :- pq_get_data_date(H,X,V).
 
 
-:- foreign(pq_get_data_int(+integer, +integer, -integer)).
+:- foreign(pq_get_data_int(+integer, +integer, -term)).
 :- foreign(pq_get_data_float(+integer, +integer, -float)).
 :- foreign(pq_get_data_bool(+integer, +integer, -boolean)).
 :- foreign(pq_get_data_date(+integer, +integer, -term)).
@@ -98,6 +98,11 @@ pq_get_data_aux(timestamp,H,X,V) :- pq_get_data_date(H,X,V).
 	   [fct_name(pq_get_data_string)]).
 
 % $Log$
+% Revision 1.6  2005/05/07 15:29:55  spa
+% Handle ints that can't fit in a tagged Prolog cell: use the DEC-10
+% approach "xwd(UPPER, LOWER)"; allow for 27 bits in LOWER to avoid going
+% into this scheme too often.
+%
 % Revision 1.5  2005/04/28 15:50:47  gjm
 % OID as strings.
 %
