@@ -76,9 +76,10 @@ void swab(const void *from, void *to, ssize_t n);
 
 #define XWD_BITS	27	/* 18 would be DEC-10 nostalgia ;-) */
 #define XWD_MASK        ((1<<XWD_BITS)-1)
-#define XWD_needed(x)   (((x) & ~XWD_MASK) != 0)
-#define XWD_UH(x)       (((unsigned) x) >> XWD_BITS)
-#define XWD_LH(x)       (x & XWD_MASK)
+//#define XWD_needed(x)   (((x) & ~XWD_MASK) != 0)
+#define XWD_needed(x)   (Rd_Integer_Check (Mk_Integer (x)) != (x))
+#define XWD_UH(x)       ((x) >> XWD_BITS)
+#define XWD_LH(x)       ((x) & XWD_MASK)
 #define XWD(uh, lh)     ((uh) << XWD_BITS) | (lh)
 
 static int xwd_functor = 0;
@@ -699,6 +700,9 @@ Bool pq_clear (int resx)
 
 /*
  * $Log$
+ * Revision 1.14  2005/05/09 12:25:18  spa
+ * Change xwd/2 criterion: it's only used if X != READ(MAKE(X))...
+ *
  * Revision 1.13  2005/05/07 15:38:30  spa
  * urk. fixed XWD_needed.
  *

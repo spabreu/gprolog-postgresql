@@ -1,3 +1,10 @@
+gprolog-postgresql (1.2-2) unstable; urgency=low
+
+  * pl-pq.c: fix xwd/2 act: only resort to it when the Prolog
+    representation is lossy.
+
+ -- Salvador Abreu <spa@debian.org>  Mon,  9 May 2005 13:23:23 +0100
+
 gprolog-postgresql (1.2-1) unstable; urgency=low
 
   * pl-pq.c, pl-pq-prolog.pl: redid the "overflowing OID" act; this time a
