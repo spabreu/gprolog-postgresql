@@ -1,3 +1,11 @@
+gprolog-postgresql (1.2-3) unstable; urgency=low
+
+  * pl-pq.c: take care of "null" column values, for all types.  This means
+    looking at whether PQgetvalue () returns zero.
+  * pl-pq.c: pq_get_data_int(): *value requires PlTerms, not ints!!
+
+ -- Salvador Abreu <spa@debian.org>  Mon,  9 May 2005 15:47:16 +0100
+
 gprolog-postgresql (1.2-2) unstable; urgency=low
 
   * pl-pq.c: fix xwd/2 act: only resort to it when the Prolog

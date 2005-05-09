@@ -462,10 +462,11 @@ Bool pq_get_data_int (int resx, int colno, PlTerm *value)
   INIT_TIMINGS ();
   value_tmp = PQgetvalue (results[resx].res, results[resx].row, colno-1);
   if (connections[connx].binary) {
-    int len = PQgetlength (results[resx].res, results[resx].row, colno-1);
+    int len = value_tmp?
+	      PQgetlength (results[resx].res, results[resx].row, colno-1): 0;
     switch (len) {
     case 0:
-      *value = 0;
+      *value = Mk_Integer (0);
       break;
     case 4:
       ((uint32_t *) &ltemp)[0] = ntohl (((uint32_t *)value_tmp)[0]);
@@ -485,8 +486,13 @@ Bool pq_get_data_int (int resx, int colno, PlTerm *value)
     }
     }
   }
+  else if (value_tmp) {
+    int ivalue;
+    sscanf (value_tmp, "%d", &ivalue);
+    *value = xwd_int32 (ivalue);
+  }
   else
-    sscanf (value_tmp, "%d", value);
+    *value = Mk_Integer (0);
   UPDATE_TIMINGS ();
   return TRUE;
 }
@@ -507,7 +513,8 @@ Bool pq_get_data_float (int resx, int colno, double *value)
   INIT_TIMINGS ();
   value_tmp = PQgetvalue (results[resx].res, results[resx].row, colno-1);
   if (connections[connx].binary) {
-    int len = PQgetlength (results[resx].res, results[resx].row, colno-1);
+    int len = value_tmp?
+	      PQgetlength (results[resx].res, results[resx].row, colno-1): 0;
     switch (len) {
     case 0:
       *value = 0.0;
@@ -530,8 +537,10 @@ Bool pq_get_data_float (int resx, int colno, double *value)
     }
     }
   }
-  else
+  else if (value_tmp)
     sscanf (value_tmp, "%lg", value);
+  else
+    *value = 0.0;
   UPDATE_TIMINGS ();
   return TRUE;
 }
@@ -550,7 +559,8 @@ Bool pq_get_data_bool (int resx, int colno, int *value)
 
   value_tmp = PQgetvalue (results[resx].res, results[resx].row, colno-1);
   if (connections[connx].binary) {
-    int len = PQgetlength (results[resx].res, results[resx].row, colno-1);
+    int len = value_tmp?
+	      PQgetlength (results[resx].res, results[resx].row, colno-1): 0;
     switch (len) {
     case 0:
       *value = FALSE;
@@ -570,8 +580,10 @@ Bool pq_get_data_bool (int resx, int colno, int *value)
     }
     }
   }
-  else
+  else if (value_tmp)
     *value = value_tmp[0] == 't';
+  else
+    *value = FALSE;
   UPDATE_TIMINGS ();
   return TRUE;
 }
@@ -596,7 +608,8 @@ Bool pq_get_data_date (int resx, int colno, PlTerm *value)
 
   if (connections[connx].binary) {
     // len must be 8:
-    int len = PQgetlength (results[resx].res, results[resx].row, colno-1);
+    int len = value_tmp?
+	      PQgetlength (results[resx].res, results[resx].row, colno-1): 0;
     Timestamp svalue_tmp;
 
     if (len != 8) {
@@ -617,10 +630,14 @@ Bool pq_get_data_date (int resx, int colno, PlTerm *value)
     dt_v[4] = tm.tm_min;
     dt_v[5] = tm.tm_sec;
   }
-  else {
+  else if (value_tmp) {
     sscanf (value_tmp, "%4d-%2d-%2d %2d:%2d:%2d",
 	    &dt_v[0], &dt_v[1], &dt_v[2],
 	    &dt_v[3], &dt_v[4], &dt_v[5]);
+  }
+  else {
+    dt_v[0] = dt_v[1] = dt_v[2] =
+      dt_v[3] = dt_v[4] = dt_v[5] = 0;
   }
 
   dt_a[0] = Mk_Integer (dt_v[0]); /* YYYY */
@@ -647,6 +664,8 @@ Bool pq_get_data_string (int resx, int colno, char **value)
 
   INIT_TIMINGS ();
   *value = PQgetvalue (results[resx].res, results[resx].row, colno-1);
+  if (!*value)
+    *value = "(null)";
   UPDATE_TIMINGS ();
   return TRUE;
 }
@@ -700,6 +719,10 @@ Bool pq_clear (int resx)
 
 /*
  * $Log$
+ * Revision 1.15  2005/05/09 14:49:46  spa
+ * Check for non-null return value for PQgetvalue ().
+ * Return a proper term in pq_get_data_int ().
+ *
  * Revision 1.14  2005/05/09 12:25:18  spa
  * Change xwd/2 criterion: it's only used if X != READ(MAKE(X))...
  *
